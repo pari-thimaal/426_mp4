@@ -41,6 +41,10 @@ namespace {
     RegisterClassInfo RegClassInfo;
 
     // TODO: maintain information about live registers
+    std::map<Register, MCPhysReg> LiveVirtRegs = {};
+    std::map<Register, int> SpillMap = {};
+    std::map<Register, bool> IsVirtRegDirty = {};
+    std::set<MCPhysReg> UsedPhysRegs = {};
 
   public:
     StringRef getPassName() const override { return "Simple Register Allocator"; }
@@ -68,6 +72,27 @@ namespace {
     }
 
   private:
+    // helper functions -------
+    void setMachineOperandToPhysReg(MachineOperand &MO, Register PhysReg) {
+      unsigned SubRegIdx = MO.getSubReg();
+      if (SubRegIdx != 0) {
+        PhysReg = TRI->getSubReg(PhysReg, SubRegIdx);
+        MO.setSubReg(0);
+      }
+      MO.setReg(PhysReg);
+      if (MO.isKill()) {
+        MO.setIsKill(false);
+      } else if (MO.isDead()) {
+        MO.setIsDead(false);
+      }
+      MO.setIsRenamable();
+    }
+
+    void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg) {
+
+    }
+
+    // end helper functions -------
 
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
@@ -76,11 +101,42 @@ namespace {
 
     void allocateInstruction(MachineInstr &MI) {
       // TODO: find and allocate all virtual registers in MI
+      for(MachineOperand &MO : MI.operands()) {
+        if (MO.isUse() && MO.isReg() && MO.getReg().isVirtual()) {
+          Register VirtReg = MO.getReg();
+          allocateOperand(MO, VirtReg, true);
+        }
+      }
     }
 
     void allocateBasicBlock(MachineBasicBlock &MBB) {
       // TODO: allocate each instruction
       // TODO: spill all live registers at the end
+      LiveVirtRegs.clear();
+      UsedPhysRegs.clear();
+
+      // populate UsedPhysRegs with reserved registers
+      for(MachineBasicBlock::RegisterMaskPair LiveIn : MBB.liveins()) {
+        UsedPhysRegs.insert(LiveIn.PhysReg);
+      }
+
+      for (MachineInstr &MI : MBB) {
+        allocateInstruction(MI);
+      }
+
+      // spill live instructions at the end, if it is not a return instruction
+      if (!MBB.empty() && !MBB.back().isReturn()) {
+        for (auto Pair : LiveVirtRegs) {
+          Register VirtReg = Pair.first;
+          MCPhysReg PhysReg = Pair.second;
+
+          if (IsVirtRegDirty[VirtReg]) {
+            spillVirtualRegister(VirtReg, PhysReg); // to be implemented
+          }
+        }
+      }
+
+      UsedPhysRegs.clear();
     }
 
     bool runOnMachineFunction(MachineFunction &MF) override {
