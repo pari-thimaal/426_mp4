@@ -105,7 +105,7 @@ namespace {
     void reloadVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
       int FrameIdx = getStackSlot(VirtReg);
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
-      TII->loadRegFromStackSlot(MBB, InsertPt, PhysReg, FrameIdx, RC, TRI);
+      TII->loadRegFromStackSlot(MBB, InsertPt, PhysReg, FrameIdx, RC, TRI, Register());
       NumLoads++;
       IsVirtRegDirty[VirtReg] = false;
     }
@@ -117,7 +117,7 @@ namespace {
     void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
       int FrameIdx = getStackSlot(VirtReg);
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
-      TII->storeRegToStackSlot(MBB, MBB.end(), PhysReg, true, FrameIdx, RC, TRI);
+      TII->storeRegToStackSlot(MBB, MBB.end(), PhysReg, true, FrameIdx, RC, TRI, Register());
       NumStores++;
       IsVirtRegDirty[VirtReg] = false;
     }
