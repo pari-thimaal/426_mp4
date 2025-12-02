@@ -132,6 +132,8 @@ namespace {
 
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
+      dbgs() << "allocateOperand called: VirtReg=" << printReg(VirtReg, TRI)
+           << " is_use=" << is_use << " MO.isImplicit=" << MO.isImplicit() << "\n";
       // TODO: allocate physical register for a virtual register
       MachineInstr *MI = MO.getParent();
       MachineBasicBlock *MBB = MI->getParent();
@@ -140,6 +142,9 @@ namespace {
       if (LiveVirtRegs.count(VirtReg)) {
         MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
         setMachineOperandToPhysReg(MO, PhysReg);
+        if (!is_use) {
+          IsVirtRegDirty[VirtReg] = true;
+        }
         return;
       }
 
@@ -206,6 +211,14 @@ namespace {
       // if this is a use, reload from stack if it was spilled before
       if (is_use && SpillMap.count(VirtReg)) {
         reloadVirtualRegister(VirtReg, Found, *MBB, MI->getIterator());
+      }
+
+      for (auto it = LiveVirtRegs.begin(); it != LiveVirtRegs.end();) {
+        if (it->second == Found && it->first != VirtReg) {
+          it = LiveVirtRegs.erase(it);
+        } else {
+          ++it;
+        }
       }
 
       for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); ++Units) {
@@ -293,6 +306,14 @@ namespace {
           const uint32_t *Mask = MO.getRegMask();
           std::vector<Register> ToSpill;
 
+          dbgs() << "RegMask found at instruction: ";
+            MI.print(dbgs());
+            dbgs() << "LiveVirtRegs contents:\n";
+            for (auto &Pair : LiveVirtRegs) {
+              dbgs() << "  " << printReg(Pair.first, TRI) << " -> " << printReg(Pair.second, TRI) << "\n";
+            }
+            dbgs() << "ToSpill size: " << ToSpill.size() << "\n";
+
           for (auto &Pair : LiveVirtRegs) {
             Register VirtReg = Pair.first;
             MCPhysReg PhysReg = Pair.second;
@@ -304,7 +325,7 @@ namespace {
 
           for (Register VirtReg : ToSpill) {
             MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
-            if (IsVirtRegDirty[VirtReg]) {
+            if (true) {
               spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);

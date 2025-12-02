@@ -23,15 +23,16 @@ fib:                                    # @fib
 	leal	-1(%rax), %ecx
 	addl	$-2, %eax
 	movl	%ecx, %edi
+	movq	%rax, 8(%rsp)                   # 8-byte Spill
 	movl	%ecx, 20(%rsp)                  # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
 	movq	8(%rsp), %rax                   # 8-byte Reload
 	movl	%eax, %edi
-	movl	%ecx, 4(%rsp)                   # 4-byte Spill
+	movl	%ecx, 16(%rsp)                  # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
-	movl	4(%rsp), %eax                   # 4-byte Reload
+	movl	16(%rsp), %eax                  # 4-byte Reload
 	addl	%eax, %ecx
 	movl	%ecx, %eax
 	addq	$24, %rsp
