@@ -45,6 +45,7 @@ namespace {
     std::map<Register, int> SpillMap = {};
     std::map<Register, bool> IsVirtRegDirty = {};
     std::set<MCPhysReg> UsedPhysRegs = {};
+    std::set<MCPhysReg> CurrentInstrPhysRegs;
 
   public:
     StringRef getPassName() const override { return "Simple Register Allocator"; }
@@ -145,6 +146,8 @@ namespace {
 
       // try to find free physical register
       for (MCPhysReg PhysReg : Order) {
+        if(CurrentInstrPhysRegs.count(PhysReg)) continue;
+
         if (isPhysRegAvailable(PhysReg)) {
           Found = PhysReg;
           break;
@@ -194,6 +197,7 @@ namespace {
     void allocateInstruction(MachineInstr &MI) {
       // TODO: find and allocate all virtual registers in MI
       // collect physical registers already used in this instruction
+      CurrentInstrPhysRegs.clear();
       std::set<MCPhysReg> PhysRegsInInstr;
       for (MachineOperand &MO : MI.operands()) {
         if (MO.isReg() && MO.getReg().isValid()) {
@@ -210,6 +214,7 @@ namespace {
         if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, true);
+          if(LiveVirtRegs.count(VirtReg)) CurrentInstrPhysRegs.insert(LiveVirtRegs[VirtReg]);
         }
       }
 
@@ -244,6 +249,7 @@ namespace {
         if (MO.isReg() && MO.isDef() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, false);
+          if(LiveVirtRegs.count(VirtReg)) CurrentInstrPhysRegs.insert(LiveVirtRegs[VirtReg]);
         }
       }
 
