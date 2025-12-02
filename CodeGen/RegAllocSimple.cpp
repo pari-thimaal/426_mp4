@@ -73,6 +73,7 @@ namespace {
 
   private:
     // helper functions -------
+    // given in mp4.pdf
     void setMachineOperandToPhysReg(MachineOperand &MO, Register PhysReg) {
       unsigned SubRegIdx = MO.getSubReg();
       if (SubRegIdx != 0) {
@@ -122,7 +123,7 @@ namespace {
       IsVirtRegDirty[VirtReg] = false;
     }
 
-    // end helper functions -------
+    // end of helper functions -------
 
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
@@ -208,7 +209,7 @@ namespace {
 
       // allocate uses first
       for (MachineOperand &MO : MI.operands()) {
-        if (MO.isUse() && MO.isReg() && MO.getReg().isVirtual()) {
+        if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, true);
         }
@@ -242,7 +243,7 @@ namespace {
 
       // allocate defs
       for (MachineOperand &MO : MI.operands()) {
-        if (MO.isDef() && MO.isReg() && MO.getReg().isVirtual()) {
+        if (MO.isReg() && MO.isDef() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, false);
         }
