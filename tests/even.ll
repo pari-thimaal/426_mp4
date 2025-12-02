@@ -25,6 +25,6 @@ false:
 }
 
 define i1 @main() {
-    %c = call i1 @even(i32 -10)
+    %c = call i1 @even(i32 -11)
     ret i1 %c
 }

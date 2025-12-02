@@ -27,13 +27,13 @@ fib:                                    # @fib
 	movl	%ecx, 20(%rsp)                  # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
-	movq	8(%rsp), %rax                   # 8-byte Reload
-	movl	%eax, %edi
+	movq	8(%rsp), %rdx                   # 8-byte Reload
+	movl	%edx, %edi
 	movl	%ecx, 16(%rsp)                  # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
-	movl	16(%rsp), %eax                  # 4-byte Reload
-	addl	%eax, %ecx
+	movl	16(%rsp), %edx                  # 4-byte Reload
+	addl	%edx, %ecx
 	movl	%ecx, %eax
 	addq	$24, %rsp
 	.cfi_def_cfa_offset 8

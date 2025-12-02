@@ -191,34 +191,24 @@ namespace {
             }
           }
 
-          if (VirtToSpill.isValid()) {
-            // spill if dirty
-            if (IsVirtRegDirty[VirtToSpill]) {
-              spillVirtualRegister(VirtToSpill, PhysReg, *MBB, MI->getIterator());
-            }
-
-            // remove from live set
-            LiveVirtRegs.erase(VirtToSpill);
-            for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
-              UsedRegUnits.erase(*Units);
-            }
-            Found = PhysReg;
-            break;
+          // spill if dirty
+          if (IsVirtRegDirty[VirtToSpill]) {
+            spillVirtualRegister(VirtToSpill, PhysReg, *MBB, MI->getIterator());
           }
+
+          // remove from live set
+          LiveVirtRegs.erase(VirtToSpill);
+          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+            UsedRegUnits.erase(*Units);
+          }
+          Found = PhysReg;
+          break;
         }
       }
 
       // if this is a use, reload from stack if it was spilled before
       if (is_use && SpillMap.count(VirtReg)) {
         reloadVirtualRegister(VirtReg, Found, *MBB, MI->getIterator());
-      }
-
-      for (auto it = LiveVirtRegs.begin(); it != LiveVirtRegs.end();) {
-        if (it->second == Found && it->first != VirtReg) {
-          it = LiveVirtRegs.erase(it);
-        } else {
-          ++it;
-        }
       }
 
       for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); ++Units) {
@@ -325,7 +315,7 @@ namespace {
 
           for (Register VirtReg : ToSpill) {
             MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
-            if (true) {
+            if (IsVirtRegDirty[VirtReg]) {  // this check is for reducing number of spills, can technically just spill everything
               spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);
@@ -347,25 +337,6 @@ namespace {
             }
           }
         }
-      }
-
-      // remove physical registers from UsedPhysRegs unless they're holding a virtual register
-      // i.e. registers req to be free in this instn for intermediate purpose but not actually holding a register
-      for (MCPhysReg PhysReg : PhysRegsInInstr) {
-        bool HoldsVirtReg = false;
-        for (auto &Pair : LiveVirtRegs) {
-          if (Pair.second == PhysReg) {
-            HoldsVirtReg = true;
-            break;
-          }
-        }
-        if (!HoldsVirtReg) {
-          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
-            UsedRegUnits.erase(*Units);
-          }
-        }
-        dbgs() << "After allocation: ";
-        MI.print(dbgs());
       }
     }
 

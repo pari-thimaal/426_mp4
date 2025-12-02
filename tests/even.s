@@ -57,7 +57,7 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	movl	$-10, %edi
+	movl	$-11, %edi
 	callq	even@PLT
 	popq	%rcx
 	.cfi_def_cfa_offset 8
