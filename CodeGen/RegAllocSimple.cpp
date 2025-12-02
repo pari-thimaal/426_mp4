@@ -88,8 +88,38 @@ namespace {
       MO.setIsRenamable();
     }
 
-    void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg) {
+    int getStackSlot(Register VirtReg) {
+      if(SpillMap.find(VirtReg) != SpillMap.end()) {
+        return SpillMap[VirtReg];
+      }
 
+      const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
+      unsigned Size = TRI->getSpillSize(*RC);
+      Align Alignment = TRI->getSpillAlign(*RC);
+  
+      int FrameIdx = MFI->CreateSpillStackObject(Size, Alignment);
+      SpillMap[VirtReg] = FrameIdx;
+      return FrameIdx;
+    }
+
+    void reloadVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
+      int FrameIdx = getStackSlot(VirtReg);
+      const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
+      TII->loadRegFromStackSlot(MBB, InsertPt, PhysReg, FrameIdx, RC, TRI);
+      NumLoads++;
+      IsVirtRegDirty[VirtReg] = false;
+    }
+
+    bool isPhysRegAvailable(MCPhysReg PhysReg) {
+      return UsedPhysRegs.count(PhysReg) == 0;
+    }
+
+    void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
+      int FrameIdx = getStackSlot(VirtReg);
+      const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
+      TII->storeRegToStackSlot(MBB, MBB.end(), PhysReg, true, FrameIdx, RC, TRI);
+      NumStores++;
+      IsVirtRegDirty[VirtReg] = false;
     }
 
     // end helper functions -------
@@ -97,14 +127,139 @@ namespace {
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
       // TODO: allocate physical register for a virtual register
+      
+      MachineInstr *MI = MO.getParent();
+      MachineBasicBlock *MBB = MI->getParent();
+
+      // check if already allocated
+      if (LiveVirtRegs.count(VirtReg)) {
+        MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
+        setMachineOperandToPhysReg(MO, PhysReg);
+        return;
+      }
+
+      // get registers from relevant class (EAX/RAX etc)
+      const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
+      ArrayRef<MCPhysReg> Order = RegClassInfo.getOrder(RC);
+
+      MCPhysReg Found = 0;
+
+      // try to find free physical register
+      for (MCPhysReg PhysReg : Order) {
+        if (isPhysRegAvailable(PhysReg)) {
+          Found = PhysReg;
+          break;
+        }
+      }
+
+      // spill one if none free
+      if (!Found) {
+        for (MCPhysReg PhysReg : Order) { // does this need to be a for loop? first iteration should suffice
+          // find virtual register mapped to this physical register
+          Register VirtToSpill = 0;
+          for (auto &Pair : LiveVirtRegs) {
+            if (Pair.second == PhysReg) {
+              VirtToSpill = Pair.first;
+              break;
+            }
+          }
+
+          if (VirtToSpill.isValid()) {
+            // spill if dirty
+            if (IsVirtRegDirty[VirtToSpill]) {
+              spillVirtualRegister(VirtToSpill, PhysReg, *MBB, MI->getIterator());
+            }
+
+            // remove from live set
+            LiveVirtRegs.erase(VirtToSpill);
+            UsedPhysRegs.erase(PhysReg);
+            Found = PhysReg;
+            break;
+          }
+        }
+      }
+
+      // if this is a use, reload from stack if it was spilled before
+      if (is_use && SpillMap.count(VirtReg)) {
+        reloadVirtualRegister(VirtReg, Found, *MBB, MI->getIterator());
+      }
+
+      UsedPhysRegs.insert(Found);
+      LiveVirtRegs[VirtReg] = Found;
+      if (!is_use) {
+        IsVirtRegDirty[VirtReg] = true;
+      }
+      setMachineOperandToPhysReg(MO, Found);
     }
 
     void allocateInstruction(MachineInstr &MI) {
       // TODO: find and allocate all virtual registers in MI
-      for(MachineOperand &MO : MI.operands()) {
+      // collect physical registers already used in this instruction
+      std::set<MCPhysReg> PhysRegsInInstr;
+      for (MachineOperand &MO : MI.operands()) {
+        if (MO.isReg() && MO.getReg().isValid()) {
+          Register Reg = MO.getReg();
+          if (Reg.isPhysical()) {
+            PhysRegsInInstr.insert(Reg);
+            UsedPhysRegs.insert(Reg); // may not be necessary
+          }
+        }
+      }
+
+      // allocate uses first
+      for (MachineOperand &MO : MI.operands()) {
         if (MO.isUse() && MO.isReg() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, true);
+        }
+      }
+
+      // spill clobbered registers before a function call
+      for (MachineOperand &MO : MI.operands()) {
+        if (MO.isRegMask()) {
+          const uint32_t *Mask = MO.getRegMask();
+          std::vector<Register> ToSpill;
+
+          for (auto &Pair : LiveVirtRegs) {
+            Register VirtReg = Pair.first;
+            MCPhysReg PhysReg = Pair.second;
+
+            if (MachineOperand::clobbersPhysReg(Mask, PhysReg)) {
+              ToSpill.push_back(VirtReg);
+            }
+          }
+
+          for (Register VirtReg : ToSpill) {
+            MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
+            if (IsVirtRegDirty[VirtReg]) {
+              spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
+            }
+            LiveVirtRegs.erase(VirtReg);
+            UsedPhysRegs.erase(PhysReg);
+          }
+        }
+      }
+
+      // allocate defs
+      for (MachineOperand &MO : MI.operands()) {
+        if (MO.isDef() && MO.isReg() && MO.getReg().isVirtual()) {
+          Register VirtReg = MO.getReg();
+          allocateOperand(MO, VirtReg, false);
+        }
+      }
+
+      // Remove physical registers from this instruction from UsedPhysRegs
+      // (unless they're holding a virtual register)
+      for (MCPhysReg PhysReg : PhysRegsInInstr) {
+        bool HoldsVirtReg = false;
+        for (auto &Pair : LiveVirtRegs) {
+          if (Pair.second == PhysReg) {
+            HoldsVirtReg = true;
+            break;
+          }
+        }
+        if (!HoldsVirtReg) {
+          UsedPhysRegs.erase(PhysReg);
         }
       }
     }
@@ -131,7 +286,7 @@ namespace {
           MCPhysReg PhysReg = Pair.second;
 
           if (IsVirtRegDirty[VirtReg]) {
-            spillVirtualRegister(VirtReg, PhysReg); // to be implemented
+            spillVirtualRegister(VirtReg, PhysReg, MBB, MBB.end()); // to be implemented
           }
         }
       }
@@ -142,8 +297,8 @@ namespace {
     bool runOnMachineFunction(MachineFunction &MF) override {
       dbgs() << "simple regalloc running on: " << MF.getName() << "\n";
 
-      outs() << "simple regalloc not implemented\n";
-      abort();
+      // outs() << "simple regalloc not implemented\n";
+      // abort();
 
       // Get some useful information about the target
       MRI = &MF.getRegInfo();
