@@ -367,11 +367,13 @@ namespace {
 
       // spill live instructions at the end, if it is not a return instruction
       if (!MBB.empty() && !MBB.back().isReturn()) {
+        auto InsertPt = MBB.getFirstTerminator();
+
         for (auto Pair : LiveVirtRegs) {
           Register VirtReg = Pair.first;
           MCPhysReg PhysReg = Pair.second;
           if (IsVirtRegDirty[VirtReg]) {
-            spillVirtualRegister(VirtReg, PhysReg, MBB, MBB.end());
+            spillVirtualRegister(VirtReg, PhysReg, MBB, InsertPt);
           }
         }
       }

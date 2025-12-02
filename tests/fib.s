@@ -10,9 +10,8 @@ fib:                                    # @fib
 	.cfi_def_cfa_offset 32
 	movl	%edi, %eax
 	cmpl	$2, %edi
-	jg	.LBB0_2
-	jmp	.LBB0_1
 	movq	%rax, 8(%rsp)                   # 8-byte Spill
+	jg	.LBB0_2
 # %bb.1:                                # %then
 	movl	$1, %eax
 	addq	$24, %rsp

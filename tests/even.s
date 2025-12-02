@@ -10,24 +10,20 @@ even:                                   # @even
 	.cfi_def_cfa_offset 16
 	movl	%edi, %eax
 	testl	%edi, %edi
-	je	.LBB0_1
-	jmp	.LBB0_2
 	movl	%eax, 4(%rsp)                   # 4-byte Spill
-	jmp	.LBB0_1
-# %bb.2:                                # %nonzero
+	je	.LBB0_5
+# %bb.1:                                # %nonzero
 	jle	.LBB0_4
-# %bb.3:                                # %positive
+# %bb.2:                                # %positive
 	movl	4(%rsp), %eax                   # 4-byte Reload
 	decl	%eax
 	movl	%eax, %edi
 	callq	even@PLT
 	movl	%eax, %ecx
 	testb	$1, %al
-	jne	.LBB0_5
-	jmp	.LBB0_1
 	movb	%cl, 3(%rsp)                    # 1-byte Spill
-	jmp	.LBB0_1
-.LBB0_5:                                # %false
+	je	.LBB0_5
+.LBB0_3:                                # %false
 	xorl	%eax, %eax
 	popq	%rcx
 	.cfi_def_cfa_offset 8
@@ -40,10 +36,9 @@ even:                                   # @even
 	callq	even@PLT
 	movl	%eax, %ecx
 	testb	$1, %al
-	jne	.LBB0_5
-	jmp	.LBB0_1
 	movb	%cl, 2(%rsp)                    # 1-byte Spill
-.LBB0_1:                                # %true
+	jne	.LBB0_3
+.LBB0_5:                                # %true
 	movb	$1, %al
 	popq	%rcx
 	.cfi_def_cfa_offset 8
@@ -60,7 +55,7 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	movl	$-11, %edi
+	movl	$-10, %edi
 	callq	even@PLT
 	popq	%rcx
 	.cfi_def_cfa_offset 8

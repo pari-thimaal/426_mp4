@@ -9,10 +9,14 @@ max:                                    # @max
 	movl	%esi, %eax
 	movl	%edi, %ecx
 	cmpl	%esi, %edi
-	jge	".LBB0_-1"
-	jmp	".LBB0_-10"
 	movl	%eax, -4(%rsp)                  # 4-byte Spill
 	movl	%ecx, -8(%rsp)                  # 4-byte Spill
+	jge	.LBB0_2
+# %bb.1:                                # %else
+	movl	-4(%rsp), %eax                  # 4-byte Reload
+	movl	%eax, %ecx
+	movl	%ecx, -8(%rsp)                  # 4-byte Spill
+.LBB0_2:                                # %end
 	movl	-8(%rsp), %ecx                  # 4-byte Reload
 	movl	%ecx, %eax
 	retq
