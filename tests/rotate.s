@@ -7,9 +7,13 @@ rotate:                                 # @rotate
 	.cfi_startproc
 # %bb.0:                                # %entry
 	movl	%esi, %eax
+	movl	%edi, %ecx
+	movl	%ecx, -8(%rsp)                  # 4-byte Spill
 	movl	%eax, %ecx
-	rorb	%cl, %cl
-	movl	%ecx, %eax
+	movl	-8(%rsp), %edx                  # 4-byte Reload
+	rorb	%cl, %dl
+	movl	%eax, -4(%rsp)                  # 4-byte Spill
+	movl	%edx, %eax
 	retq
 .Lfunc_end0:
 	.size	rotate, .Lfunc_end0-rotate

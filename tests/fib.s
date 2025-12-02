@@ -21,21 +21,23 @@ fib:                                    # @fib
 .LBB0_2:                                # %else
 	.cfi_def_cfa_offset 32
 	movq	8(%rsp), %rax                   # 8-byte Reload
-	decl	%eax
+	leal	-1(%rax), %ecx
 	addl	$-2, %eax
-	movl	%eax, %edi
+	movl	%ecx, %edi
+	movl	%ecx, 20(%rsp)                  # 4-byte Spill
 	callq	fib@PLT
+	movl	%eax, %ecx
 	movq	8(%rsp), %rax                   # 8-byte Reload
 	movl	%eax, %edi
+	movl	%ecx, 4(%rsp)                   # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
 	movl	4(%rsp), %eax                   # 4-byte Reload
 	addl	%eax, %ecx
 	movl	%ecx, %eax
+	addq	$24, %rsp
+	.cfi_def_cfa_offset 8
 	retq
-	movl	%eax, 20(%rsp)                  # 4-byte Spill
-	movl	%ecx, 4(%rsp)                   # 4-byte Spill
-	movl	%ecx, 16(%rsp)                  # 4-byte Spill
 .Lfunc_end0:
 	.size	fib, .Lfunc_end0-fib
 	.cfi_endproc

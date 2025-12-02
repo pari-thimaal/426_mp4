@@ -45,7 +45,7 @@ namespace {
     std::map<Register, int> SpillMap = {};
     std::map<Register, bool> IsVirtRegDirty = {};
     std::set<unsigned> UsedRegUnits = {};
-    std::set<MCPhysReg> CurrentInstrRegUnits = {};
+    std::set<unsigned> CurrentInstrRegUnits = {};
 
   public:
     StringRef getPassName() const override { return "Simple Register Allocator"; }
@@ -236,7 +236,40 @@ namespace {
             PhysRegsInInstr.insert(Reg);
             for (MCRegUnitIterator Units(Reg, TRI); Units.isValid(); ++Units) {
               UsedRegUnits.insert(*Units);
+              CurrentInstrRegUnits.insert(*Units);
             }
+          }
+        }
+      }
+
+      for (MCPhysReg PhysReg : PhysRegsInInstr) {
+        std::vector<Register> ToSpill;
+        for (auto &Pair : LiveVirtRegs) {
+          MCPhysReg VirtPhysReg = Pair.second;
+          // Check if they share register units
+          bool Overlaps = false;
+          for (MCRegUnitIterator Units1(PhysReg, TRI); Units1.isValid(); ++Units1) {
+            for (MCRegUnitIterator Units2(VirtPhysReg, TRI); Units2.isValid(); ++Units2) {
+              if (*Units1 == *Units2) {
+                Overlaps = true;
+                break;
+              }
+            }
+            if (Overlaps) break;
+          }
+          if (Overlaps) {
+            ToSpill.push_back(Pair.first);
+          }
+        }
+
+        for (Register VirtReg : ToSpill) {
+          MCPhysReg VR_PhysReg = LiveVirtRegs[VirtReg];
+          if (IsVirtRegDirty[VirtReg]) {
+            spillVirtualRegister(VirtReg, VR_PhysReg, *MI.getParent(), MI.getIterator());
+          }
+          LiveVirtRegs.erase(VirtReg);
+          for (MCRegUnitIterator Units(VR_PhysReg, TRI); Units.isValid(); ++Units) {
+            UsedRegUnits.erase(*Units);
           }
         }
       }
@@ -310,6 +343,8 @@ namespace {
             UsedRegUnits.erase(*Units);
           }
         }
+        dbgs() << "After allocation: ";
+        MI.print(dbgs());
       }
     }
 
