@@ -379,6 +379,9 @@ namespace {
       // outs() << "simple regalloc not implemented\n";
       // abort();
 
+      SpillMap.clear();
+      IsVirtRegDirty.clear();
+
       // Get some useful information about the target
       MRI = &MF.getRegInfo();
       const TargetSubtargetInfo &STI = MF.getSubtarget();
