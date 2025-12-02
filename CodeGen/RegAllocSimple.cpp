@@ -45,7 +45,7 @@ namespace {
     std::map<Register, int> SpillMap = {};
     std::map<Register, bool> IsVirtRegDirty = {};
     std::set<unsigned> UsedRegUnits = {};
-    std::set<MCPhysReg> CurrentInstrPhysRegs;
+    std::set<MCPhysReg> CurrentInstrRegUnits = {};
 
   public:
     StringRef getPassName() const override { return "Simple Register Allocator"; }
@@ -150,7 +150,14 @@ namespace {
 
       // try to find free physical register
       for (MCPhysReg PhysReg : Order) {
-        if(CurrentInstrPhysRegs.count(PhysReg)) continue;
+        bool Conflicts = false;
+        for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+          if (CurrentInstrRegUnits.count(*Units)) {
+            Conflicts = true;
+            break;
+          }
+        }
+        if (Conflicts) continue;
 
         if (isPhysRegAvailable(PhysReg)) {
           Found = PhysReg;
@@ -161,7 +168,14 @@ namespace {
       // spill one if none free
       if (!Found) {
         for (MCPhysReg PhysReg : Order) { // does this need to be a for loop? first iteration should suffice
-          if(CurrentInstrPhysRegs.count(PhysReg)) continue;
+          bool Conflicts = false;
+          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+            if (CurrentInstrRegUnits.count(*Units)) {
+              Conflicts = true;
+              break;
+            }
+          }
+          if (Conflicts) continue;
 
           // find virtual register mapped to this physical register
           Register VirtToSpill = 0;
@@ -180,7 +194,7 @@ namespace {
 
             // remove from live set
             LiveVirtRegs.erase(VirtToSpill);
-            for (MCRegUnitIterator Units(VirtToSpill, TRI); Units.isValid(); ++Units) {
+            for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
               UsedRegUnits.erase(*Units);
             }
             Found = PhysReg;
@@ -213,7 +227,7 @@ namespace {
     void allocateInstruction(MachineInstr &MI) {
       // TODO: find and allocate all virtual registers in MI
       // collect physical registers already used in this instruction
-      CurrentInstrPhysRegs.clear();
+      CurrentInstrRegUnits.clear();
       std::set<MCPhysReg> PhysRegsInInstr;
       for (MachineOperand &MO : MI.operands()) {
         if (MO.isReg() && MO.getReg().isValid()) {
@@ -232,7 +246,11 @@ namespace {
         if (MO.isReg() && MO.isUse() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, true);
-          if(LiveVirtRegs.count(VirtReg)) CurrentInstrPhysRegs.insert(LiveVirtRegs[VirtReg]);
+          if(LiveVirtRegs.count(VirtReg)) {
+            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); ++Units) {
+              CurrentInstrRegUnits.insert(*Units);
+            }
+          }
         }
       }
 
@@ -257,7 +275,7 @@ namespace {
               spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);
-            for (MCRegUnitIterator Units(VirtReg, TRI); Units.isValid(); ++Units) {
+            for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
               UsedRegUnits.erase(*Units);
             }
           }
@@ -269,7 +287,11 @@ namespace {
         if (MO.isReg() && MO.isDef() && MO.getReg().isVirtual()) {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, false);
-          if(LiveVirtRegs.count(VirtReg)) CurrentInstrPhysRegs.insert(LiveVirtRegs[VirtReg]);
+          if(LiveVirtRegs.count(VirtReg)) {
+            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); ++Units) {
+              CurrentInstrRegUnits.insert(*Units);
+            }
+          }
         }
       }
 
