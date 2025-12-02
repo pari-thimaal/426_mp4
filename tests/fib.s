@@ -9,32 +9,40 @@ fib:                                    # @fib
 	subq	$24, %rsp
 	.cfi_def_cfa_offset 32
 	movl	%edi, %eax
-	cmpl	$2, %edi
-	movq	%rax, 8(%rsp)                   # 8-byte Spill
+	movl	%eax, %ecx
+	cmpl	$2, %ecx
+	movl	%eax, 20(%rsp)                  # 4-byte Spill
+	movl	%ecx, 16(%rsp)                  # 4-byte Spill
 	jg	.LBB0_2
 # %bb.1:                                # %then
 	movl	$1, %eax
+	movl	%eax, 12(%rsp)                  # 4-byte Spill
+	movl	12(%rsp), %ecx                  # 4-byte Reload
+	movl	%ecx, %eax
 	addq	$24, %rsp
 	.cfi_def_cfa_offset 8
 	retq
 .LBB0_2:                                # %else
 	.cfi_def_cfa_offset 32
-	movq	8(%rsp), %rax                   # 8-byte Reload
-	leal	-1(%rax), %ecx
-	addl	$-2, %eax
+	movl	16(%rsp), %eax                  # 4-byte Reload
+	movl	%eax, %ecx
+	subl	$1, %ecx
+	movl	%eax, %edx
+	subl	$2, %edx
 	movl	%ecx, %edi
-	movq	%rax, 8(%rsp)                   # 8-byte Spill
-	movl	%ecx, 20(%rsp)                  # 4-byte Spill
+	movl	%edx, 8(%rsp)                   # 4-byte Spill
+	movl	%ecx, 4(%rsp)                   # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
-	movq	8(%rsp), %rdx                   # 8-byte Reload
+	movl	8(%rsp), %edx                   # 4-byte Reload
 	movl	%edx, %edi
-	movl	%ecx, 16(%rsp)                  # 4-byte Spill
+	movl	%ecx, (%rsp)                    # 4-byte Spill
 	callq	fib@PLT
 	movl	%eax, %ecx
-	movl	16(%rsp), %edx                  # 4-byte Reload
-	addl	%edx, %ecx
-	movl	%ecx, %eax
+	movl	(%rsp), %edx                    # 4-byte Reload
+	movl	%edx, %esi
+	addl	%ecx, %esi
+	movl	%esi, %eax
 	addq	$24, %rsp
 	.cfi_def_cfa_offset 8
 	retq
@@ -50,8 +58,12 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	movl	$12, %edi
+	movl	$12, %eax
+	movl	%eax, %edi
+	movl	%eax, 4(%rsp)                   # 4-byte Spill
 	callq	fib@PLT
+	movl	%eax, %ecx
+	movl	%ecx, %eax
 	popq	%rcx
 	.cfi_def_cfa_offset 8
 	retq

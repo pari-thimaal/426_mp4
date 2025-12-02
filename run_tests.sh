@@ -13,7 +13,7 @@ for llfile in tests/*.ll; do
     
     # Step 1: Run llc with simple register allocator
     echo "Running llc..."
-    llc -regalloc=simple "$llfile" -o "tests/${basename}.s"
+    llc -O0 -regalloc=simple "$llfile" -o "tests/${basename}.s"
     
     # Step 2: Compile with gcc
     echo "Compiling with gcc..."
