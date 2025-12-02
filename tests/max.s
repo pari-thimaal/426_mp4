@@ -50,8 +50,8 @@ main:                                   # @main
 	movl	%eax, 4(%rsp)                   # 4-byte Spill
 	movl	%ecx, (%rsp)                    # 4-byte Spill
 	callq	max@PLT
-	movl	%eax, %ecx
-	movl	%ecx, %eax
+	movl	%eax, %edx
+	movl	%edx, %eax
 	popq	%rcx
 	.cfi_def_cfa_offset 8
 	retq

@@ -6,9 +6,15 @@
 rotate:                                 # @rotate
 	.cfi_startproc
 # %bb.0:                                # %entry
-	pushq	%rbx
+	pushq	%rbp
 	.cfi_def_cfa_offset 16
-	.cfi_offset %rbx, -16
+	pushq	%r14
+	.cfi_def_cfa_offset 24
+	pushq	%rbx
+	.cfi_def_cfa_offset 32
+	.cfi_offset %rbx, -32
+	.cfi_offset %r14, -24
+	.cfi_offset %rbp, -16
 	movl	%esi, %eax
 	movl	%edi, %ecx
 	movb	%al, %dl
@@ -17,24 +23,23 @@ rotate:                                 # @rotate
 	andb	$7, %r9b
 	movl	%ecx, -4(%rsp)                  # 4-byte Spill
 	movb	%r9b, %cl
-	movb	%r8b, %cl
-	movb	%cl, -5(%rsp)                   # 1-byte Spill
-	movb	-5(%rsp), %r10b                 # 1-byte Reload
+	movb	%r8b, %r10b
 	shrb	%cl, %r10b
-	movb	$8, %cl
-	movb	%cl, %r11b
-	subb	%r9b, %r11b
-	movb	%cl, -6(%rsp)                   # 1-byte Spill
-	movb	%r11b, %cl
-	movb	%r8b, %cl
-	movb	%cl, -7(%rsp)                   # 1-byte Spill
-	movb	-7(%rsp), %bl                   # 1-byte Reload
-	shlb	%cl, %bl
+	movb	$8, %r11b
+	movb	%r11b, %bl
+	subb	%r9b, %bl
 	movb	%bl, %cl
-	orb	%r10b, %cl
-	movl	%eax, -12(%rsp)                 # 4-byte Spill
-	movb	%cl, %al
+	movb	%r8b, %bpl
+	shlb	%cl, %bpl
+	movb	%bpl, %r14b
+	orb	%r10b, %r14b
+	movl	%eax, -8(%rsp)                  # 4-byte Spill
+	movb	%r14b, %al
 	popq	%rbx
+	.cfi_def_cfa_offset 24
+	popq	%r14
+	.cfi_def_cfa_offset 16
+	popq	%rbp
 	.cfi_def_cfa_offset 8
 	retq
 .Lfunc_end0:
@@ -56,8 +61,8 @@ main:                                   # @main
 	movl	%eax, 4(%rsp)                   # 4-byte Spill
 	movl	%ecx, (%rsp)                    # 4-byte Spill
 	callq	rotate@PLT
-	movb	%al, %cl
-	movb	%cl, %al
+	movb	%al, %dl
+	movb	%dl, %al
 	popq	%rcx
 	.cfi_def_cfa_offset 8
 	retq

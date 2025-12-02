@@ -198,9 +198,6 @@ namespace {
 
           // remove from live set
           LiveVirtRegs.erase(VirtToSpill);
-          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
-            UsedRegUnits.erase(*Units);
-          }
           Found = PhysReg;
           break;
         }
@@ -209,6 +206,15 @@ namespace {
       // if this is a use, reload from stack if it was spilled before
       if (is_use && SpillMap.count(VirtReg)) {
         reloadVirtualRegister(VirtReg, Found, *MBB, MI->getIterator());
+      }
+
+      // remove any old virtreg that was mapped to this phys reg
+      for (auto it = LiveVirtRegs.begin(); it != LiveVirtRegs.end(); ) {
+        if (it->second == Found && it->first != VirtReg) {
+          it = LiveVirtRegs.erase(it);
+        } else {
+          ++it;
+        }
       }
 
       for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); ++Units) {
@@ -271,9 +277,6 @@ namespace {
             spillVirtualRegister(VirtReg, VR_PhysReg, *MI.getParent(), MI.getIterator());
           }
           LiveVirtRegs.erase(VirtReg);
-          for (MCRegUnitIterator Units(VR_PhysReg, TRI); Units.isValid(); ++Units) {
-            UsedRegUnits.erase(*Units);
-          }
         }
       }
 
@@ -319,9 +322,6 @@ namespace {
               spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);
-            for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
-              UsedRegUnits.erase(*Units);
-            }
           }
         }
       }

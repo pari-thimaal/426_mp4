@@ -25,9 +25,9 @@ even:                                   # @even
 	movl	%ecx, %edi
 	movl	%ecx, 28(%rsp)                  # 4-byte Spill
 	callq	even@PLT
-	movb	%al, %cl
-	testb	$1, %cl
-	movb	%cl, 27(%rsp)                   # 1-byte Spill
+	movb	%al, %dl
+	testb	$1, %dl
+	movb	%dl, 27(%rsp)                   # 1-byte Spill
 	jne	.LBB0_5
 	jmp	.LBB0_4
 .LBB0_3:                                # %negative
@@ -37,9 +37,9 @@ even:                                   # @even
 	movl	%ecx, %edi
 	movl	%ecx, 20(%rsp)                  # 4-byte Spill
 	callq	even@PLT
-	movb	%al, %cl
-	testb	$1, %cl
-	movb	%cl, 19(%rsp)                   # 1-byte Spill
+	movb	%al, %dl
+	testb	$1, %dl
+	movb	%dl, 19(%rsp)                   # 1-byte Spill
 	jne	.LBB0_5
 .LBB0_4:                                # %true
 	movb	$1, %al
@@ -70,7 +70,7 @@ main:                                   # @main
 # %bb.0:
 	pushq	%rax
 	.cfi_def_cfa_offset 16
-	movl	$-11, %eax
+	movl	$-10, %eax
 	movl	%eax, %edi
 	movl	%eax, 4(%rsp)                   # 4-byte Spill
 	callq	even@PLT
