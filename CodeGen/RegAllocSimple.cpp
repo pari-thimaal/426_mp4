@@ -44,7 +44,7 @@ namespace {
     std::map<Register, MCPhysReg> LiveVirtRegs = {};
     std::map<Register, int> SpillMap = {};
     std::map<Register, bool> IsVirtRegDirty = {};
-    std::set<MCPhysReg> UsedPhysRegs = {};
+    std::set<unsigned> UsedRegUnits = {};
     std::set<MCPhysReg> CurrentInstrPhysRegs;
 
   public:
@@ -113,8 +113,12 @@ namespace {
     }
 
     bool isPhysRegAvailable(MCPhysReg PhysReg) {
-      return UsedPhysRegs.count(PhysReg) == 0;
-    }
+      for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+        if (UsedRegUnits.count(*Units))
+          return false;
+      }
+      return true;
+      }
 
     void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
       int FrameIdx = getStackSlot(VirtReg);
@@ -157,6 +161,8 @@ namespace {
       // spill one if none free
       if (!Found) {
         for (MCPhysReg PhysReg : Order) { // does this need to be a for loop? first iteration should suffice
+          if(CurrentInstrPhysRegs.count(PhysReg)) continue;
+
           // find virtual register mapped to this physical register
           Register VirtToSpill = 0;
           for (auto &Pair : LiveVirtRegs) {
@@ -174,7 +180,9 @@ namespace {
 
             // remove from live set
             LiveVirtRegs.erase(VirtToSpill);
-            UsedPhysRegs.erase(PhysReg);
+            for (MCRegUnitIterator Units(VirtToSpill, TRI); Units.isValid(); ++Units) {
+              UsedRegUnits.erase(*Units);
+            }
             Found = PhysReg;
             break;
           }
@@ -186,10 +194,18 @@ namespace {
         reloadVirtualRegister(VirtReg, Found, *MBB, MI->getIterator());
       }
 
-      UsedPhysRegs.insert(Found);
+      for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); ++Units) {
+        UsedRegUnits.insert(*Units);
+      }
       LiveVirtRegs[VirtReg] = Found;
       if (!is_use) {
         IsVirtRegDirty[VirtReg] = true;
+
+        // Add debug output here
+        dbgs() << "Allocated " << (is_use ? "use" : "def") << " of ";
+        dbgs() << printReg(VirtReg, TRI) << " to " << printReg(Found, TRI);
+        dbgs() << " at instruction: ";
+        MI->print(dbgs());
       }
       setMachineOperandToPhysReg(MO, Found);
     }
@@ -204,7 +220,9 @@ namespace {
           Register Reg = MO.getReg();
           if (Reg.isPhysical()) {
             PhysRegsInInstr.insert(Reg);
-            UsedPhysRegs.insert(Reg); // may not be necessary
+            for (MCRegUnitIterator Units(Reg, TRI); Units.isValid(); ++Units) {
+              UsedRegUnits.insert(*Units);
+            }
           }
         }
       }
@@ -239,7 +257,9 @@ namespace {
               spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);
-            UsedPhysRegs.erase(PhysReg);
+            for (MCRegUnitIterator Units(VirtReg, TRI); Units.isValid(); ++Units) {
+              UsedRegUnits.erase(*Units);
+            }
           }
         }
       }
@@ -264,7 +284,9 @@ namespace {
           }
         }
         if (!HoldsVirtReg) {
-          UsedPhysRegs.erase(PhysReg);
+          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+            UsedRegUnits.erase(*Units);
+          }
         }
       }
     }
@@ -273,11 +295,13 @@ namespace {
       // TODO: allocate each instruction
       // TODO: spill all live registers at the end
       LiveVirtRegs.clear();
-      UsedPhysRegs.clear();
+      UsedRegUnits.clear();
 
       // populate UsedPhysRegs with reserved registers
       for(MachineBasicBlock::RegisterMaskPair LiveIn : MBB.liveins()) {
-        UsedPhysRegs.insert(LiveIn.PhysReg);
+        for (MCRegUnitIterator Units(LiveIn.PhysReg, TRI); Units.isValid(); ++Units) {
+          UsedRegUnits.insert(*Units);
+        }
       }
 
       for (MachineInstr &MI : MBB) {
@@ -295,7 +319,7 @@ namespace {
         }
       }
 
-      UsedPhysRegs.clear();
+      UsedRegUnits.clear();
     }
 
     bool runOnMachineFunction(MachineFunction &MF) override {
