@@ -128,7 +128,6 @@ namespace {
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
       // TODO: allocate physical register for a virtual register
-      
       MachineInstr *MI = MO.getParent();
       MachineBasicBlock *MBB = MI->getParent();
 
@@ -142,7 +141,6 @@ namespace {
       // get registers from relevant class (EAX/RAX etc)
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
       ArrayRef<MCPhysReg> Order = RegClassInfo.getOrder(RC);
-
       MCPhysReg Found = 0;
 
       // try to find free physical register
@@ -249,8 +247,8 @@ namespace {
         }
       }
 
-      // Remove physical registers from this instruction from UsedPhysRegs
-      // (unless they're holding a virtual register)
+      // remove physical registers from UsedPhysRegs unless they're holding a virtual register
+      // i.e. registers req to be free in this instn for intermediate purpose but not actually holding a register
       for (MCPhysReg PhysReg : PhysRegsInInstr) {
         bool HoldsVirtReg = false;
         for (auto &Pair : LiveVirtRegs) {
@@ -285,9 +283,8 @@ namespace {
         for (auto Pair : LiveVirtRegs) {
           Register VirtReg = Pair.first;
           MCPhysReg PhysReg = Pair.second;
-
           if (IsVirtRegDirty[VirtReg]) {
-            spillVirtualRegister(VirtReg, PhysReg, MBB, MBB.end()); // to be implemented
+            spillVirtualRegister(VirtReg, PhysReg, MBB, MBB.end());
           }
         }
       }
