@@ -119,7 +119,7 @@ namespace {
     void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
       int FrameIdx = getStackSlot(VirtReg);
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
-      TII->storeRegToStackSlot(MBB, MBB.end(), PhysReg, true, FrameIdx, RC, TRI, Register());
+      TII->storeRegToStackSlot(MBB, InsertPt, PhysReg, false, FrameIdx, RC, TRI, Register());
       NumStores++;
       IsVirtRegDirty[VirtReg] = false;
     }
