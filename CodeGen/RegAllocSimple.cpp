@@ -118,7 +118,7 @@ namespace {
           return false;
       }
       return true;
-      }
+    }
 
     void spillVirtualRegister(Register VirtReg, MCPhysReg PhysReg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt) {
       int FrameIdx = getStackSlot(VirtReg);
@@ -132,8 +132,6 @@ namespace {
 
     /// Allocate physical register for virtual register operand
     void allocateOperand(MachineOperand &MO, Register VirtReg, bool is_use) {
-      dbgs() << "allocateOperand called: VirtReg=" << printReg(VirtReg, TRI)
-           << " is_use=" << is_use << " MO.isImplicit=" << MO.isImplicit() << "\n";
       // TODO: allocate physical register for a virtual register
       MachineInstr *MI = MO.getParent();
       MachineBasicBlock *MBB = MI->getParent();
@@ -223,12 +221,6 @@ namespace {
       LiveVirtRegs[VirtReg] = Found;
       if (!is_use) {
         IsVirtRegDirty[VirtReg] = true;
-
-        // Add debug output here
-        dbgs() << "Allocated " << (is_use ? "use" : "def") << " of ";
-        dbgs() << printReg(VirtReg, TRI) << " to " << printReg(Found, TRI);
-        dbgs() << " at instruction: ";
-        MI->print(dbgs());
       }
       setMachineOperandToPhysReg(MO, Found);
     }
@@ -255,7 +247,7 @@ namespace {
         std::vector<Register> ToSpill;
         for (auto &Pair : LiveVirtRegs) {
           MCPhysReg VirtPhysReg = Pair.second;
-          // Check if they share register units
+          // check if they share register units
           bool Overlaps = false;
           for (MCRegUnitIterator Units1(PhysReg, TRI); Units1.isValid(); ++Units1) {
             for (MCRegUnitIterator Units2(VirtPhysReg, TRI); Units2.isValid(); ++Units2) {
@@ -299,13 +291,13 @@ namespace {
           const uint32_t *Mask = MO.getRegMask();
           std::vector<Register> ToSpill;
 
-          dbgs() << "RegMask found at instruction: ";
-            MI.print(dbgs());
-            dbgs() << "LiveVirtRegs contents:\n";
-            for (auto &Pair : LiveVirtRegs) {
-              dbgs() << "  " << printReg(Pair.first, TRI) << " -> " << printReg(Pair.second, TRI) << "\n";
-            }
-            dbgs() << "ToSpill size: " << ToSpill.size() << "\n";
+          // dbgs() << "regMask found at instruction: ";
+          // MI.print(dbgs());
+          // dbgs() << "liveVirtRegs contents:\n";
+          // for (auto &Pair : LiveVirtRegs) {
+          //   dbgs() << "  " << printReg(Pair.first, TRI) << " --> " << printReg(Pair.second, TRI) << "\n";
+          // }
+          // dbgs() << "ToSpill size: " << ToSpill.size() << "\n";
 
           for (auto &Pair : LiveVirtRegs) {
             Register VirtReg = Pair.first;
@@ -374,7 +366,6 @@ namespace {
     }
 
     bool runOnMachineFunction(MachineFunction &MF) override {
-      dbgs() << "simple regalloc running on: " << MF.getName() << "\n";
 
       // outs() << "simple regalloc not implemented\n";
       // abort();
