@@ -96,10 +96,7 @@ namespace {
       }
 
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
-      unsigned Size = TRI->getSpillSize(*RC);
-      Align Alignment = TRI->getSpillAlign(*RC);
-  
-      int FrameIdx = MFI->CreateSpillStackObject(Size, Alignment);
+      int FrameIdx = MFI->CreateSpillStackObject(TRI->getSpillSize(*RC), TRI->getSpillAlign(*RC));
       SpillMap[VirtReg] = FrameIdx;
       return FrameIdx;
     }
@@ -113,7 +110,7 @@ namespace {
     }
 
     bool isPhysRegAvailable(MCPhysReg PhysReg) {
-      for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+      for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); Units++) {
         if (UsedRegUnits.count(*Units))
           return false;
       }
@@ -154,7 +151,7 @@ namespace {
       // try to find free physical register
       for (MCPhysReg PhysReg : Order) {
         bool Conflicts = false;
-        for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+        for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); Units++) {
           if (CurrentInstrRegUnits.count(*Units)) {
             Conflicts = true;
             break;
@@ -172,7 +169,7 @@ namespace {
       if (!Found) {
         for (MCPhysReg PhysReg : Order) { // does this need to be a for loop? first iteration should suffice
           bool Conflicts = false;
-          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); ++Units) {
+          for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); Units++) {
             if (CurrentInstrRegUnits.count(*Units)) {
               Conflicts = true;
               break;
@@ -193,8 +190,6 @@ namespace {
           if (IsVirtRegDirty[VirtToSpill]) {
             spillVirtualRegister(VirtToSpill, PhysReg, *MBB, MI->getIterator());
           }
-
-          // remove from live set
           LiveVirtRegs.erase(VirtToSpill);
           Found = PhysReg;
           break;
@@ -215,7 +210,7 @@ namespace {
         }
       }
 
-      for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); ++Units) {
+      for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); Units++) {
         UsedRegUnits.insert(*Units);
       }
       LiveVirtRegs[VirtReg] = Found;
@@ -235,7 +230,7 @@ namespace {
           Register Reg = MO.getReg();
           if (Reg.isPhysical()) {
             PhysRegsInInstr.insert(Reg);
-            for (MCRegUnitIterator Units(Reg, TRI); Units.isValid(); ++Units) {
+            for (MCRegUnitIterator Units(Reg, TRI); Units.isValid(); Units++) {
               UsedRegUnits.insert(*Units);
               CurrentInstrRegUnits.insert(*Units);
             }
@@ -249,8 +244,8 @@ namespace {
           MCPhysReg VirtPhysReg = Pair.second;
           // check if they share register units
           bool Overlaps = false;
-          for (MCRegUnitIterator Units1(PhysReg, TRI); Units1.isValid(); ++Units1) {
-            for (MCRegUnitIterator Units2(VirtPhysReg, TRI); Units2.isValid(); ++Units2) {
+          for (MCRegUnitIterator Units1(PhysReg, TRI); Units1.isValid(); Units1++) {
+            for (MCRegUnitIterator Units2(VirtPhysReg, TRI); Units2.isValid(); Units2++) {
               if (*Units1 == *Units2) {
                 Overlaps = true;
                 break;
@@ -278,7 +273,7 @@ namespace {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, true);
           if(LiveVirtRegs.count(VirtReg)) {
-            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); ++Units) {
+            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); Units++) {
               CurrentInstrRegUnits.insert(*Units);
             }
           }
@@ -300,18 +295,14 @@ namespace {
           // dbgs() << "ToSpill size: " << ToSpill.size() << "\n";
 
           for (auto &Pair : LiveVirtRegs) {
-            Register VirtReg = Pair.first;
-            MCPhysReg PhysReg = Pair.second;
-
-            if (MachineOperand::clobbersPhysReg(Mask, PhysReg)) {
-              ToSpill.push_back(VirtReg);
+            if (MachineOperand::clobbersPhysReg(Mask, Pair.second)) {
+              ToSpill.push_back(Pair.first);
             }
           }
 
           for (Register VirtReg : ToSpill) {
-            MCPhysReg PhysReg = LiveVirtRegs[VirtReg];
             if (IsVirtRegDirty[VirtReg]) {  // this check is for reducing number of spills, can technically just spill everything
-              spillVirtualRegister(VirtReg, PhysReg, *MI.getParent(), MI.getIterator());
+              spillVirtualRegister(VirtReg, LiveVirtRegs[VirtReg], *MI.getParent(), MI.getIterator());
             }
             LiveVirtRegs.erase(VirtReg);
           }
@@ -324,7 +315,7 @@ namespace {
           Register VirtReg = MO.getReg();
           allocateOperand(MO, VirtReg, false);
           if(LiveVirtRegs.count(VirtReg)) {
-            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); ++Units) {
+            for (MCRegUnitIterator Units(LiveVirtRegs[VirtReg], TRI); Units.isValid(); Units++) {
               CurrentInstrRegUnits.insert(*Units);
             }
           }
@@ -340,7 +331,7 @@ namespace {
 
       // populate UsedPhysRegs with reserved registers
       for(MachineBasicBlock::RegisterMaskPair LiveIn : MBB.liveins()) {
-        for (MCRegUnitIterator Units(LiveIn.PhysReg, TRI); Units.isValid(); ++Units) {
+        for (MCRegUnitIterator Units(LiveIn.PhysReg, TRI); Units.isValid(); Units++) {
           UsedRegUnits.insert(*Units);
         }
       }
@@ -354,14 +345,11 @@ namespace {
         auto InsertPt = MBB.getFirstTerminator();
 
         for (auto Pair : LiveVirtRegs) {
-          Register VirtReg = Pair.first;
-          MCPhysReg PhysReg = Pair.second;
-          if (IsVirtRegDirty[VirtReg]) {
-            spillVirtualRegister(VirtReg, PhysReg, MBB, InsertPt);
+          if (IsVirtRegDirty[Pair.first]) {
+            spillVirtualRegister(Pair.first, Pair.second, MBB, InsertPt); // virt reg, phys reg
           }
         }
       }
-
       UsedRegUnits.clear();
     }
 
