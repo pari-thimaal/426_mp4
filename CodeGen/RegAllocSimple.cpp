@@ -143,21 +143,19 @@ namespace {
         return;
       }
 
-      // get registers from relevant class (EAX/RAX etc)
+      // get registers from relevant class (eax/rax etc)
       const TargetRegisterClass *RC = MRI->getRegClass(VirtReg);
-      ArrayRef<MCPhysReg> Order = RegClassInfo.getOrder(RC);
       MCPhysReg Found = 0;
-
       // try to find free physical register
-      for (MCPhysReg PhysReg : Order) {
-        bool Conflicts = false;
+      for (MCPhysReg PhysReg : RegClassInfo.getOrder(RC)) {
+        bool conflicts = false;
         for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); Units++) {
           if (CurrentInstrRegUnits.count(*Units)) {
-            Conflicts = true;
+            conflicts = true;
             break;
           }
         }
-        if (Conflicts) continue;
+        if (conflicts) continue;
 
         if (isPhysRegAvailable(PhysReg)) {
           Found = PhysReg;
@@ -167,15 +165,15 @@ namespace {
 
       // spill one if none free
       if (!Found) {
-        for (MCPhysReg PhysReg : Order) { // does this need to be a for loop? first iteration should suffice
-          bool Conflicts = false;
+        for (MCPhysReg PhysReg : RegClassInfo.getOrder(RC)) { // does this need to be a for loop? first iteration should suffice
+          bool conflicts = false;
           for (MCRegUnitIterator Units(PhysReg, TRI); Units.isValid(); Units++) {
             if (CurrentInstrRegUnits.count(*Units)) {
-              Conflicts = true;
+              conflicts = true;
               break;
             }
           }
-          if (Conflicts) continue;
+          if (conflicts) continue;
 
           // find virtual register mapped to this physical register
           Register VirtToSpill = 0;
@@ -203,11 +201,7 @@ namespace {
 
       // remove any old virtreg that was mapped to this phys reg
       for (auto it = LiveVirtRegs.begin(); it != LiveVirtRegs.end(); ) {
-        if (it->second == Found && it->first != VirtReg) {
-          it = LiveVirtRegs.erase(it);
-        } else {
-          ++it;
-        }
+        it = (it->second == Found && it->first != VirtReg) ? LiveVirtRegs.erase(it) : std::next(it);
       }
 
       for (MCRegUnitIterator Units(Found, TRI); Units.isValid(); Units++) {
@@ -242,18 +236,18 @@ namespace {
         std::vector<Register> ToSpill;
         for (auto &Pair : LiveVirtRegs) {
           MCPhysReg VirtPhysReg = Pair.second;
-          // check if they share register units
-          bool Overlaps = false;
-          for (MCRegUnitIterator Units1(PhysReg, TRI); Units1.isValid(); Units1++) {
-            for (MCRegUnitIterator Units2(VirtPhysReg, TRI); Units2.isValid(); Units2++) {
-              if (*Units1 == *Units2) {
-                Overlaps = true;
+          // check if they share reg units
+          bool overlaps = false;
+          for (MCRegUnitIterator prIter(PhysReg, TRI); prIter.isValid(); prIter++) {
+            for (MCRegUnitIterator vprIter(VirtPhysReg, TRI); vprIter.isValid(); vprIter++) {
+              if (*prIter == *vprIter) {
+                overlaps = true;
                 break;
               }
             }
-            if (Overlaps) break;
+            if (overlaps) break;
           }
-          if (Overlaps) {
+          if (overlaps) {
             ToSpill.push_back(Pair.first);
           }
         }
@@ -285,14 +279,6 @@ namespace {
         if (MO.isRegMask()) {
           const uint32_t *Mask = MO.getRegMask();
           std::vector<Register> ToSpill;
-
-          // dbgs() << "regMask found at instruction: ";
-          // MI.print(dbgs());
-          // dbgs() << "liveVirtRegs contents:\n";
-          // for (auto &Pair : LiveVirtRegs) {
-          //   dbgs() << "  " << printReg(Pair.first, TRI) << " --> " << printReg(Pair.second, TRI) << "\n";
-          // }
-          // dbgs() << "ToSpill size: " << ToSpill.size() << "\n";
 
           for (auto &Pair : LiveVirtRegs) {
             if (MachineOperand::clobbersPhysReg(Mask, Pair.second)) {
